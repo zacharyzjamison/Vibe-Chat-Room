@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Chat</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+        #messages {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            margin-bottom: 20px;
+            padding: 10px;
+        }
+        #message-input {
+            width: 80%;
+            padding: 10px;
+            margin-right: 10px;
+        }
+        #send-btn {
+            padding: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>WebSocket Chat</h1>
+    <div id="messages"></div>
+    <input type="text" id="message-input" placeholder="Type your message...">
+    <button id="send-btn">Send</button>
+
+    <script>
+        // Connect to the WebSocket server
+        const socket = new WebSocket("ws://localhost:8080/ws");
+
+        // When the connection is established
+        socket.onopen = () => {
+            console.log("Connected to WebSocket server");
+        };
+
+        // When a message is received from the server
+        socket.onmessage = (event) => {
+            const message = event.data;
+            const messagesDiv = document.getElementById("messages");
+            const messageElement = document.createElement("div");
+            messageElement.textContent = message;
+            messagesDiv.appendChild(messageElement);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight; // Auto-scroll to the latest message
+        };
+
+        // Send the message to the WebSocket server when the button is clicked
+        document.getElementById("send-btn").onclick = () => {
+            const input = document.getElementById("message-input");
+            const message = input.value;
+            if (message) {
+                socket.send(message);
+                input.value = ""; // Clear the input after sending
+            }
+        };
+
+        // Handle WebSocket errors
+        socket.onerror = (error) => {
+            console.error("WebSocket error:", error);
+        };
+
+        // Handle WebSocket closure
+        socket.onclose = (event) => {
+            console.log("WebSocket connection closed", event);
+        };
+    </script>
+</body>
+</html>
