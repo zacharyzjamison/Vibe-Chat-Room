@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"strconv"
 	"sync"
 
 	"github.com/gorilla/websocket"
@@ -19,6 +21,12 @@ type ChatServer struct {
 	Upgrader  websocket.Upgrader
 	Broadcast chan string
 }
+
+// Map to track all running servers
+var runningServers = struct {
+	sync.RWMutex
+	servers map[string]*ChatServer
+}{servers: make(map[string]*ChatServer)}
 
 // Create a new ChatServer instance
 func NewChatServer(id string, port string) *ChatServer {
@@ -140,13 +148,97 @@ func (s *ChatServer) Start() {
 	}
 }
 
+// StartCustomServer creates and starts a server on a specified port
+func StartCustomServer(port string) (*ChatServer, error) {
+	// Validate port number
+	portNum, err := strconv.Atoi(port)
+	if err != nil || portNum < 1024 || portNum > 65535 {
+		return nil, fmt.Errorf("invalid port number: %s", port)
+	}
+
+	// Check if a server is already running on this port
+	runningServers.RLock()
+	_, exists := runningServers.servers[port]
+	runningServers.RUnlock()
+
+	if exists {
+		return nil, fmt.Errorf("a server is already running on port %s", port)
+	}
+
+	// Create a unique ID for the custom server
+	serverID := fmt.Sprintf("custom-%s", port)
+
+	// Create the custom server
+	customServer := NewChatServer(serverID, port)
+
+	// Add to running servers map
+	runningServers.Lock()
+	runningServers.servers[port] = customServer
+	runningServers.Unlock()
+
+	// Start the server in a goroutine
+	go customServer.Start()
+
+	log.Printf("Started custom server on port %s\n", port)
+	return customServer, nil
+}
+
+// API handler to start a new custom server
+func handleCreateServer(w http.ResponseWriter, r *http.Request) {
+	// Only allow POST requests
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get port from the query parameter
+	port := r.URL.Query().Get("port")
+	if port == "" {
+		http.Error(w, "Port parameter is required", http.StatusBadRequest)
+		return
+	}
+
+	// Start the custom server
+	_, err := StartCustomServer(port)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Return success response
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintf(w, "Server started on port %s", port)
+}
+
 func main() {
+	// Check if a custom port was specified as a command-line argument
+	if len(os.Args) > 1 && os.Args[1] == "custom" && len(os.Args) > 2 {
+		// Start a custom server with the specified port
+		_, err := StartCustomServer(os.Args[2])
+		if err != nil {
+			log.Fatal(err)
+		}
+		// Wait indefinitely
+		select {}
+		return
+	}
+
 	// Parse command-line flags for default server
 	defaultPort := flag.String("port", "8080", "Default server port")
 	flag.Parse()
 
 	// Create and start the default server
 	defaultServer := NewChatServer("main", *defaultPort)
+
+	// Add to running servers map
+	runningServers.Lock()
+	runningServers.servers[*defaultPort] = defaultServer
+	runningServers.Unlock()
+
+	// Set up the API endpoint for creating custom servers on the main server
+	http.HandleFunc("/api/create-server", handleCreateServer)
+
+	// Start the default server
 	go defaultServer.Start()
 
 	// Define additional servers
@@ -157,6 +249,9 @@ func main() {
 
 	// Start each additional server in its own goroutine
 	for _, server := range servers {
+		runningServers.Lock()
+		runningServers.servers[server.Port] = server
+		runningServers.Unlock()
 		go server.Start()
 	}
 

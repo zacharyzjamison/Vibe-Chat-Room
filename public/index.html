@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -11,18 +12,19 @@
             max-width: 800px;
             margin: 0 auto;
         }
-        
-        h1, h2 {
+
+        h1,
+        h2 {
             color: #333;
         }
-        
+
         #server-selection {
             margin-bottom: 20px;
             padding: 15px;
             background-color: #f5f5f5;
             border-radius: 5px;
         }
-        
+
         #messages {
             max-height: 400px;
             overflow-y: auto;
@@ -31,25 +33,25 @@
             padding: 10px;
             border-radius: 5px;
         }
-        
+
         .message-container {
             margin-bottom: 10px;
         }
-        
+
         .system-message {
             color: #666;
             font-style: italic;
         }
-        
+
         .user-message {
             color: #000;
         }
-        
+
         .input-container {
             display: flex;
             margin-top: 15px;
         }
-        
+
         #message-input {
             flex-grow: 1;
             padding: 10px;
@@ -57,7 +59,7 @@
             border-radius: 5px;
             border: 1px solid #ccc;
         }
-        
+
         #send-btn {
             padding: 10px 15px;
             background-color: #4CAF50;
@@ -66,11 +68,11 @@
             border-radius: 5px;
             cursor: pointer;
         }
-        
+
         #send-btn:hover {
             background-color: #45a049;
         }
-        
+
         .server-btn {
             padding: 8px 15px;
             margin-right: 10px;
@@ -81,34 +83,34 @@
             color: white;
             margin-bottom: 5px;
         }
-        
+
         .server-btn:hover {
             background-color: #0b7dda;
         }
-        
+
         .active-server {
             background-color: #0b7dda;
             font-weight: bold;
         }
-        
+
         .connection-status {
             margin-top: 10px;
             font-style: italic;
         }
-        
+
         .connected {
             color: green;
         }
-        
+
         .disconnected {
             color: red;
         }
-        
+
         .username-prompt {
             font-weight: bold;
             color: #2196F3;
         }
-        
+
         #custom-server-input {
             margin-top: 10px;
             padding: 10px;
@@ -116,14 +118,14 @@
             border-radius: 5px;
             display: none;
         }
-        
+
         #custom-port {
             padding: 8px;
             width: 150px;
             border-radius: 5px;
             border: 1px solid #ccc;
         }
-        
+
         #connect-custom {
             padding: 8px 15px;
             background-color: #2196F3;
@@ -132,16 +134,17 @@
             border-radius: 5px;
             cursor: pointer;
         }
-        
+
         #current-server-info {
             margin-top: 10px;
             font-weight: bold;
         }
     </style>
 </head>
+
 <body>
     <h1>Multi-Server WebSocket Chat</h1>
-    
+
     <div id="server-selection">
         <h2>Select a Server</h2>
         <div>
@@ -161,15 +164,16 @@
             Status: <span id="status-indicator">Not connected</span>
         </div>
     </div>
-    
+
     <div id="messages"></div>
-    
+
     <div class="input-container">
         <input type="text" id="message-input" placeholder="Type your message..." disabled>
         <button id="send-btn" disabled>Send</button>
     </div>
 
     <script>
+        // Replace the existing script in public/index.html with this updated version
         let socket = null;
         let currentPort = null;
         let currentServerName = "Main Server";
@@ -180,17 +184,17 @@
         const statusIndicator = document.getElementById("status-indicator");
         const currentServerDisplay = document.getElementById("current-server");
         const customServerInput = document.getElementById("custom-server-input");
-        
+
         // Function to connect to a WebSocket server
         function connectToServer(port, serverName) {
             // Close existing connection if open
             if (socket) {
                 socket.close();
             }
-            
+
             // Reset username status when switching servers
             usernameSet = false;
-            
+
             // Update UI
             messageInput.disabled = true;
             sendBtn.disabled = true;
@@ -198,43 +202,68 @@
             statusIndicator.textContent = "Connecting...";
             currentServerDisplay.textContent = serverName + " (" + port + ")";
             currentServerName = serverName;
-            
+
             // Clear messages when switching servers
             messagesDiv.innerHTML = "";
-            
+
+            // If this is a custom server, try to start it first
+            if (serverName === "Custom Server") {
+                // Display a message about starting a custom server
+                const messageElement = document.createElement("div");
+                messageElement.className = "message-container system-message";
+                messageElement.textContent = "Attempting to connect to custom server on port " + port + "...";
+                messagesDiv.appendChild(messageElement);
+            }
+
+            // Try to connect with a timeout
+            let connectionTimeout = setTimeout(() => {
+                if (socket && socket.readyState !== WebSocket.OPEN) {
+                    statusIndicator.className = "disconnected";
+                    statusIndicator.textContent = `Failed to connect to port ${port}`;
+
+                    if (serverName === "Custom Server") {
+                        const messageElement = document.createElement("div");
+                        messageElement.className = "message-container system-message";
+                        messageElement.textContent = "Unable to connect to custom server. Make sure the server is running on port " + port + ".";
+                        messagesDiv.appendChild(messageElement);
+                    }
+                }
+            }, 3000);
+
             // Connect to the specified server
             socket = new WebSocket(`ws://localhost:${port}/ws`);
             currentPort = port;
-            
+
             // When the connection is established
             socket.onopen = () => {
+                clearTimeout(connectionTimeout);
                 console.log(`Connected to WebSocket server on port ${port}`);
                 statusIndicator.className = "connected";
                 statusIndicator.textContent = `Connected`;
-                
+
                 // Enable input after connection is established
                 messageInput.disabled = false;
                 sendBtn.disabled = false;
             };
-            
+
             // When a message is received from the server
             socket.onmessage = (event) => {
                 const message = event.data;
                 const messageElement = document.createElement("div");
                 messageElement.className = "message-container";
-                
+
                 // Check if it's a system message
                 if (message.startsWith("SYSTEM_MSG:")) {
                     const systemMessage = message.substring(11); // Remove the SYSTEM_MSG: prefix
                     messageElement.classList.add("system-message");
                     messageElement.textContent = systemMessage;
-                    
+
                     // Check if it's a username confirmation
                     if (systemMessage.includes("Username set to")) {
                         usernameSet = true;
                         messageInput.placeholder = "Type your message...";
                     }
-                    
+
                     // Check if it's requesting a username
                     if (systemMessage.includes("Please type your username")) {
                         messageElement.classList.add("username-prompt");
@@ -245,32 +274,34 @@
                     messageElement.classList.add("user-message");
                     messageElement.textContent = message;
                 }
-                
+
                 messagesDiv.appendChild(messageElement);
                 messagesDiv.scrollTop = messagesDiv.scrollHeight; // Auto-scroll
             };
-            
+
             // Send the message to the WebSocket server when the button is clicked
             sendBtn.onclick = sendMessage;
-            
+
             // Also send on Enter key
             messageInput.onkeypress = (event) => {
                 if (event.key === "Enter") {
                     sendMessage();
                 }
             };
-            
+
             // Handle WebSocket errors
             socket.onerror = (error) => {
+                clearTimeout(connectionTimeout);
                 console.error("WebSocket error:", error);
                 statusIndicator.className = "disconnected";
                 statusIndicator.textContent = `Error connecting to port ${port}`;
                 messageInput.disabled = true;
                 sendBtn.disabled = true;
             };
-            
+
             // Handle WebSocket closure
             socket.onclose = (event) => {
+                clearTimeout(connectionTimeout);
                 console.log("WebSocket connection closed", event);
                 statusIndicator.className = "disconnected";
                 statusIndicator.textContent = "Disconnected";
@@ -278,7 +309,7 @@
                 sendBtn.disabled = true;
             };
         }
-        
+
         function sendMessage() {
             const message = messageInput.value.trim();
             if (message && socket && socket.readyState === WebSocket.OPEN) {
@@ -286,12 +317,12 @@
                 messageInput.value = ""; // Clear the input after sending
             }
         }
-        
+
         // Set up event listeners for server selection buttons
         document.querySelectorAll(".server-btn").forEach(btn => {
             btn.addEventListener("click", () => {
                 const port = btn.getAttribute("data-port");
-                
+
                 // Handle custom server option
                 if (port === "custom") {
                     // Toggle the custom server input
@@ -303,35 +334,43 @@
                     }
                     return;
                 }
-                
+
                 // Update active button
                 document.querySelectorAll(".server-btn").forEach(b => {
                     b.classList.remove("active-server");
                 });
                 btn.classList.add("active-server");
-                
+
                 // Hide custom server input if it was shown
                 customServerInput.style.display = "none";
-                
+
                 // Connect to the selected server
                 connectToServer(port, btn.textContent.split(" (")[0]);
             });
         });
-        
+
         // Set up event listener for custom server connection
         document.getElementById("connect-custom").addEventListener("click", () => {
             const customPortInput = document.getElementById("custom-port");
             const customPort = customPortInput.value.trim();
-            
+
             if (customPort && !isNaN(customPort)) {
+                // Validate port range
+                const portNum = parseInt(customPort);
+                if (portNum < 1024 || portNum > 65535) {
+                    alert("Please enter a valid port number between 1024 and 65535");
+                    customPortInput.focus();
+                    return;
+                }
+
                 // Update active button (none)
                 document.querySelectorAll(".server-btn").forEach(b => {
                     b.classList.remove("active-server");
                 });
-                
+
                 // Make the custom button active
                 document.getElementById("custom-server-btn").classList.add("active-server");
-                
+
                 // Connect to the custom server
                 connectToServer(customPort, "Custom Server");
             } else {
@@ -339,16 +378,17 @@
                 customPortInput.focus();
             }
         });
-        
+
         // Handle Enter key in custom port field
         document.getElementById("custom-port").addEventListener("keypress", (event) => {
             if (event.key === "Enter") {
                 document.getElementById("connect-custom").click();
             }
         });
-        
+
         // Connect to the default server on page load
         connectToServer("8080", "Main Server");
     </script>
 </body>
+
 </html>
