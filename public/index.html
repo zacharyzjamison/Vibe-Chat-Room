@@ -184,6 +184,10 @@
         const statusIndicator = document.getElementById("status-indicator");
         const currentServerDisplay = document.getElementById("current-server");
         const customServerInput = document.getElementById("custom-server-input");
+        const serverSelectionDiv = document.querySelector("#server-selection div:first-of-type");
+
+        // Track custom servers that have been added
+        const customServers = new Set();
 
         // Function to connect to a WebSocket server
         function connectToServer(port, serverName) {
@@ -244,6 +248,12 @@
                 // Enable input after connection is established
                 messageInput.disabled = false;
                 sendBtn.disabled = false;
+
+                // If this is a custom server and connection successful, add it to the server list
+                if (serverName === "Custom Server" && !customServers.has(port)) {
+                    addCustomServerButton(port);
+                    customServers.add(port);
+                }
             };
 
             // When a message is received from the server
@@ -308,6 +318,40 @@
                 messageInput.disabled = true;
                 sendBtn.disabled = true;
             };
+        }
+
+        // Function to add a new custom server button
+        function addCustomServerButton(port) {
+            // Create a new button for this custom server
+            const newServerBtn = document.createElement("button");
+            newServerBtn.className = "server-btn";
+            newServerBtn.setAttribute("data-port", port);
+            newServerBtn.textContent = `Custom Server (${port})`;
+
+            // Insert the new button before the custom server button
+            const customServerBtn = document.getElementById("custom-server-btn");
+            serverSelectionDiv.insertBefore(newServerBtn, customServerBtn);
+
+            // Add event listener to the new button
+            newServerBtn.addEventListener("click", () => {
+                // Update active button
+                document.querySelectorAll(".server-btn").forEach(b => {
+                    b.classList.remove("active-server");
+                });
+                newServerBtn.classList.add("active-server");
+
+                // Hide custom server input if it was shown
+                customServerInput.style.display = "none";
+
+                // Connect to this custom server
+                connectToServer(port, `Custom Server (${port})`);
+            });
+
+            // Show a message that a new server button was added
+            const messageElement = document.createElement("div");
+            messageElement.className = "message-container system-message";
+            messageElement.textContent = `Added custom server on port ${port} to the server list.`;
+            messagesDiv.appendChild(messageElement);
         }
 
         function sendMessage() {
